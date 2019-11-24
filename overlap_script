@@ -1,4 +1,4 @@
-To understand more deeply how the pybedtools work, take a look at this website:
+To understand more deeply how the pybedtools intersect tool works, take a look at this website:
 https://bedtools.readthedocs.io/en/latest/content/tools/intersect.html
 
 # Preliminary step to determine which m6A motifs overlap with genes (or gene features)
