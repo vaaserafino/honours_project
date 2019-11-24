@@ -24,4 +24,4 @@ import pybedtools
 a = pybedtools.BedTool('araport11genes.gtf')
 b = pybedtools.BedTool('significant_m6A.gtf')
 c = a.intersect(b, v=True, s=True)
-c.saveas('gene_withnom6A_list.gtf')
+c.saveas('gene_without_m6A.gtf')
