@@ -1,0 +1,27 @@
+To understand more deeply how the pybedtools work, take a look at this website:
+https://bedtools.readthedocs.io/en/latest/content/tools/intersect.html
+
+# Preliminary step to determine which m6A motifs overlap with genes (or gene features)
+
+import pybedtools
+a = pybedtools.BedTool('araport11genes.gtf')
+b = pybedtools.BedTool('nanopore_m6a_motifs.gtf')
+c = a.intersect(b, v=True, s=True) # v=TRUE meaning b features that do not overlap with a features will be written in the output file, s=TRUE meaning features need to be on the same strand to be considered overlapping
+c.saveas('significant_m6As.gtf')
+
+#To obtain the list of genes associated with m6A motifs
+
+import pybedtools
+a = pybedtools.BedTool('araport11genes.gtf')
+b = pybedtools.BedTool('significant_m6A.gtf')
+c = a.intersect(b, wa=True, s=True) # wa=TRUE meaning overlapping features will be written in the output file as found in the a feature file and s=TRUE stands for same strandedness only (as in previous code)
+c.saveas('gene_with_m6As.gtf')
+
+
+#To obtain the list of genes not associated with m6A motifs
+
+import pybedtools
+a = pybedtools.BedTool('araport11genes.gtf')
+b = pybedtools.BedTool('significant_m6A.gtf')
+c = a.intersect(b, v=True, s=True)
+c.saveas('gene_withnom6A_list.gtf')
