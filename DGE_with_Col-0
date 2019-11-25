@@ -106,6 +106,7 @@ y <- estimateDisp(y, design)
 
 
 #Fit the data to the design matrix following a generalised linear model and determine the top 10 tags
+
 fit <- glmFit(y, design)
 lrt <- glmLRT(fit, coef=ncol(design))
 tt <- topTags(lrt)
