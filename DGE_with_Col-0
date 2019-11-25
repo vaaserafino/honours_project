@@ -4,6 +4,7 @@ library("BiocManager")
 library("tximport")
 library("edgeR")
 
+
 # Create an object containing all the files found in the directory "differential_gene_expression"
 
 dir <- "differential_gene_expression/"
@@ -14,26 +15,32 @@ list.files(dir)
 
 samples <- read.table(file.path(dir,"samples_.txt"), header=TRUE)
 
+
 # Create an object containing every "quant.sf" needed in this experiment
 
 files <- file.path(dir, "salmon", samples$sample_name, "quant.sf")
+
 
 #Rename (if needed) the column depending on the sample type
 
 column<- c("VIR","VIR","VIR","VIR","VIR","VIR","vir","vir","vir","vir","vir","vir","Col","Col","Col","Col","Col","Col")
 names(files) <- paste0(column,1:18)
 
+
 #Verify that all the needed files are present in the object "files" (should come up with TRUE)
 
 all(file.exists(files))
+
 
 #Import the GenomicFeatures package part of the tximport package
 
 library("GenomicFeatures")
 
+
 #Create a txdb object using the most up to date TAIR genome annotation (here, Araport11)
 
 txdb <- makeTxDbFromGFF("Araport11_GFF3_genes_transposons.gff",format="gff")
+
 
 #Summarize the transcript abundance up to the gene level
 
@@ -41,123 +48,77 @@ k <- keys(txdb, keytype= "TXNAME")
 tx2gene <- select(txdb, k, "GENEID", "TXNAME")
 head(tx2gene)
 
-#Generate the counts from abundance for each replicate
+
+#Generate the abundance, counts and lengths of each gene for each replicate
 
 txi <- tximport(files, type = "salmon", tx2gene = tx2gene)
 names(txi)
 head(txi$counts)
 
 
+#Verification step (last command should come out as TRUE)
 
 txi.tx <- tximport(files, type="salmon", txOut=TRUE)
-
-reading in files with read.delim (install 'readr' package for speed up)
-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 
-
 txi.sum <- summarizeToGene(txi.tx, tx2gene)
-
 all.equal(txi$counts, txi.sum$counts)
 
-transcripts missing from tx2gene: 316
-summarizing abundance
-summarizing counts
-summarizing length
 
-TRUE
+#Creation of objects needed during the data normalisation  step
 
 cts <- txi$counts
-
 normMat <- txi$length
 
+
+#Normalisation step
+
 normMat <- normMat/exp(rowMeans(log(normMat)))
-
 normCts <- cts/normMat
-
 eff.lib <- calcNormFactors(normCts) * colSums(normCts)
-
 normMat <- sweep(normMat, 2, eff.lib, "*")
-
 normMat <- log(normMat)
 
+
+#Creation of DGE list from the gene counts and filtering stage
+
 y <- DGEList(cts)
-
 y$samples$group <- paste0(samples$sample_type)
-
 y <- scaleOffset(y, normMat)
-
 keep <- filterByExpr(y)
-
 y <- y[keep,]
+head(y)
 
-names(y)
 
-    'counts'
-    'samples'
-    'offset'
+#Two different visualisation of the data (BCV and MDS plots)
 
 plotMDS(y, method="bcv")
-
 plotMDS(y)
+
+
+#Create a design model matrix 
 
 design <- model.matrix(~ y$samples$group, y$samples)
 
-y <- calcNormFactors(y)
 
+#Calculate the normalisation factors to estimate dispersion (common, trended and tagwise)
+
+y <- calcNormFactors(y)
 y <- estimateDisp(y, design)
 
+
+#Fit the data to the design matrix following a generalised linear model and determine the top 10 tags
 fit <- glmFit(y, design)
-
 lrt <- glmLRT(fit, coef=ncol(design))
-
 tt <- topTags(lrt)
+tt
+
+#Create objects containing all the down- and up- regulated genes
 
 Upregulated <- tt[tt$table$logFC > 0,]
-
 Downregulated <- tt[tt$table$logFC < 0,]
 
-Upregulated
 
-Downregulated
+#Use decideTestDGE to determine how many genes are down-, up- or not differentially regulated
 
-$table
-    A data.frame: 5 × 5 	logFC	logCPM	LR	PValue	FDR
-    	<dbl>	<dbl>	<dbl>	<dbl>	<dbl>
-    AT3G05685	4.465412	3.5493843	496.94994	4.381326e-110	9.017646e-106
-    AT2G06995	3.115802	0.2636031	72.47549	1.691191e-17	4.972585e-14
-    AT1G06957	8.545267	-0.3489362	68.57707	1.220145e-16	3.139127e-13
-    AT1G32960	3.759372	2.7479085	63.84329	1.347204e-15	3.080905e-12
-    AT2G15042	1.989400	1.7053393	63.07145	1.993431e-15	4.102880e-12
-$adjust.method
-    'BH'
-$comparison
-    'y𝑠𝑎𝑚𝑝𝑙𝑒𝑠
+dTD <- decideTestsDGE(lrt, adjust.method="BH", p.value=0.05)
+summary (dTD)
 
-    groupVIR'
-$test
-    'glm'
-
-$table
-    A data.frame: 5 × 5 	logFC	logCPM	LR	PValue	FDR
-    	<dbl>	<dbl>	<dbl>	<dbl>	<dbl>
-    AT1G27480	-1.7129168	4.795119	164.88923	9.671810e-38	9.953260e-34
-    AT1G64630	-7.9101156	3.245972	142.46636	7.689722e-33	5.275662e-29
-    AT4G34480	-1.3730519	4.997771	105.54438	9.279631e-25	4.774834e-21
-    AT1G66260	-0.9744652	6.242999	92.33265	7.326538e-22	3.015896e-18
-    AT3G48200	-1.1207622	6.672330	83.49834	6.376945e-20	2.187505e-16
-$adjust.method
-    'BH'
-$comparison
-    'y𝑠𝑎𝑚𝑝𝑙𝑒𝑠
-
-    groupVIR'
-$test
-    'glm'
-
-de1 <- decideTestsDGE(lrt, adjust.method="BH", p.value=0.05)
-
-summary (de1)
-
-       y$samples$groupVIR
-Down                  543
-NotSig              19424
-Up                    615
