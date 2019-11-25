@@ -10,6 +10,6 @@ Parker MT, Knop K, Sherwood AV, Schurch NJ, Mackinnon K, Gould PD, Hall A, Barto
 
 Some formatting steps were conducted via UNIX commands.
 
-Any question concerning my work during this project will be adressed via my email:
+Any question concerning my work on this project will be adressed via email:
 
-v.a.a.serafino@dundee.ac.uk
+      v.a.a.serafino@dundee.ac.uk
