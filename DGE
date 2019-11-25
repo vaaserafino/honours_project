@@ -190,7 +190,7 @@ grid.draw(vd)
 dev.print(jpeg,"vennd.jpeg")
 
 
-#Produce an MA plot with down- and up- regulated genes colored in pale green (using GLM-LRT DGE analysis results)
+#Produce an MA plot with down- and up- regulated genes colored in light green (using GLM-LRT DGE analysis results)
 
 gene_list <- as.vector(rownames(selectedLRT)) 
 maPlot( x=resLRT, y=selectedLRT, logAbundance=resLRT$table$logCPM, logFC=resLRT$table$logFC,de.tags=rownames(selectedLRT),xlab="mean of normalized counts",ylab="log fold change",col=NULL, smooth.scatter=FALSE)
