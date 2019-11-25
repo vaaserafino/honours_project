@@ -1,4 +1,4 @@
-                  Integration of mRNA processing with RNA methylation in Arabidopsis thaliana 
+#Integration of mRNA processing with RNA methylation in *Arabidopsis thaliana* 
 
 This GitHub was created to make available each of the scripts I produced and ran during the course of my Honours Project.
 
