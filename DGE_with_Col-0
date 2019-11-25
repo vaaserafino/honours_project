@@ -63,7 +63,7 @@ txi.sum <- summarizeToGene(txi.tx, tx2gene)
 all.equal(txi$counts, txi.sum$counts)
 
 
-#Creation of objects needed during the data normalisation  step
+#Creation of objects needed during the data normalisation step
 
 cts <- txi$counts
 normMat <- txi$length
@@ -78,7 +78,7 @@ normMat <- sweep(normMat, 2, eff.lib, "*")
 normMat <- log(normMat)
 
 
-#Creation of DGE list from the gene counts and filtering stage
+#Creation of DGE list from the gene counts and filtering step
 
 y <- DGEList(cts)
 y$samples$group <- paste0(samples$sample_type)
@@ -88,7 +88,7 @@ y <- y[keep,]
 head(y)
 
 
-#Two different visualisation of the data (BCV and MDS plots)
+#Two different visualisations of the data (BCV and MDS plots)
 
 plotMDS(y, method="bcv")
 plotMDS(y)
