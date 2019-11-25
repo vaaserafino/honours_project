@@ -132,6 +132,7 @@ nrow(selectedLRT)
 
 
 #Create two objects individually containing all the significantly down- and up- regulated genes (numbers will come out of 3rd and 4th commands respectively)
+
 UpregulatedLRT <-selectedLRT[selectedLRT$logFC > 0,]
 DownregulatedLRT <- selectedLRT[selectedLRT$logFC < 0,]
 nrow(UpregulatedLRT)
@@ -155,7 +156,7 @@ resExactTest <- topTags(dgeExactTest, n = nrow(dgeExactTest$table))
 nrow(resExactTest)
 
 
-#Compare raw p-values to adjusted p-values for one gene (picked randomly) across all the replicates
+#Compare raw p-values to adjusted p-values for each gene of the set
 
 par(mfrow = c(1,2))
 hist(resExactTest$table$PValue, xlab = "p-value", main = "raw p-values")
