@@ -1,447 +1,198 @@
+#Import the needed packages for this experiment
+
 library("BiocManager")
-
 library("tximport")
-
 library("edgeR")
+library("VennDiagram")
 
-Bioconductor version 3.10 (BiocManager 1.30.9), ?BiocManager::install for help
-Loading required package: limma
 
-dir <- "differential_expression/"
+# Create an object containing all the files found in the directory "differential_gene_expression"
 
+dir <- "differential_gene_expression/"
 list.files(dir)
 
-    'DGE.ipynb'
-    'DGEplots'
-    'salmon'
-    'samples_.txt'
-    'samples.txt'
-    'samples.txt~'
-    'vir1_vs_VIR_GFP.tsv'
 
-samples <- read.table(file.path(dir,"samples.txt"), header=TRUE)
+# Create an object containing every salmon file by reading "samples.txt"
+
+samples <- read.table(file.path(dir,"samples_.txt"), header=TRUE)
+
+
+# Create an object containing every "quant.sf" needed in this experiment
 
 files <- file.path(dir, "salmon", samples$sample_name, "quant.sf")
 
-column<- c("VIR","VIR","VIR","VIR","VIR","VIR","vir","vir","vir","vir","vir","vir")
 
+#Rename (if needed) the column depending on the sample type
+
+column<- c("VIR","VIR","VIR","VIR","VIR","VIR","vir","vir","vir","vir","vir","vir")
 names(files) <- paste0(column,1:12)
+
+
+#Verify that all the needed files are present in the object "files" (should come up with TRUE)
 
 all(file.exists(files))
 
-TRUE
 
-library(TxDb.Athaliana.BioMart.plantsmart28)
+#Import the GenomicFeatures package part of the tximport package
+
+library("GenomicFeatures")
+
+
+#Create a txdb object using the most up to date TAIR genome annotation (here, Araport11)
 
 txdb <- makeTxDbFromGFF("Araport11_GFF3_genes_transposons.gff",format="gff")
 
+
+#Summarize the transcript abundance up to the gene level
+
 k <- keys(txdb, keytype= "TXNAME")
-
 tx2gene <- select(txdb, k, "GENEID", "TXNAME")
+head(tx2gene)
 
-Loading required package: GenomicFeatures
-Loading required package: BiocGenerics
-Loading required package: parallel
 
-Attaching package: ‘BiocGenerics’
-
-The following objects are masked from ‘package:parallel’:
-
-    clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
-    clusterExport, clusterMap, parApply, parCapply, parLapply,
-    parLapplyLB, parRapply, parSapply, parSapplyLB
-
-The following object is masked from ‘package:limma’:
-
-    plotMA
-
-The following objects are masked from ‘package:stats’:
-
-    IQR, mad, sd, var, xtabs
-
-The following objects are masked from ‘package:base’:
-
-    anyDuplicated, append, as.data.frame, basename, cbind, colnames,
-    dirname, do.call, duplicated, eval, evalq, Filter, Find, get, grep,
-    grepl, intersect, is.unsorted, lapply, Map, mapply, match, mget,
-    order, paste, pmax, pmax.int, pmin, pmin.int, Position, rank,
-    rbind, Reduce, rownames, sapply, setdiff, sort, table, tapply,
-    union, unique, unsplit, which, which.max, which.min
-
-Loading required package: S4Vectors
-Loading required package: stats4
-
-Attaching package: ‘S4Vectors’
-
-The following object is masked from ‘package:base’:
-
-    expand.grid
-
-Loading required package: IRanges
-Loading required package: GenomeInfoDb
-Loading required package: GenomicRanges
-Loading required package: AnnotationDbi
-Loading required package: Biobase
-Welcome to Bioconductor
-
-    Vignettes contain introductory material; view with
-    'browseVignettes()'. To cite Bioconductor, see
-    'citation("Biobase")', and for packages 'citation("pkgname")'.
-
-Import genomic features from the file as a GRanges object ... OK
-Prepare the 'metadata' data frame ... OK
-Make the TxDb object ... Warning message in .get_cds_IDX(mcols0$type, mcols0$phase):
-“The "phase" metadata column contains non-NA values for features of type
-  exon. This information was ignored.”OK
-'select()' returned 1:1 mapping between keys and columns
+#Generate the abundance, counts and lengths of each gene for each replicate
 
 txi <- tximport(files, type = "salmon", tx2gene = tx2gene)
-
 names(txi)
-
-reading in files with read.delim (install 'readr' package for speed up)
-1 2 3 4 5 6 7 8 9 10 11 12 
-transcripts missing from tx2gene: 316
-summarizing abundance
-summarizing counts
-summarizing length
-
-    'abundance'
-    'counts'
-    'length'
-    'countsFromAbundance'
-
 head(txi$counts)
 
-A matrix: 6 × 12 of type dbl 	VIR1	VIR2	VIR3	VIR4	VIR5	VIR6	vir7	vir8	vir9	vir10	vir11	vir12
-AT1G01010	81	76.000	65	114.000	106.000	63	117.000	105.000	259.000	171	107.000	344
-AT1G01020	472	328.000	222	279.000	301.001	213	223.999	191.001	474.000	283	233.001	767
-AT1G01030	207	119.000	76	137.000	134.000	114	253.000	153.000	421.000	265	211.000	424
-AT1G01040	814	575.000	619	939.000	617.000	581	1126.000	814.000	2399.000	1214	982.000	3140
-AT1G01050	1160	1003.000	866	1016.000	985.000	737	601.000	591.000	1380.000	836	651.000	1981
-AT1G01060	2124	1686.001	1975	2726.001	1812.000	1381	1902.000	1465.001	5000.001	2122	1793.000	5720
+
+#Verification step (last command should come out as TRUE)
 
 txi.tx <- tximport(files, type="salmon", txOut=TRUE)
-
-reading in files with read.delim (install 'readr' package for speed up)
-1 2 3 4 5 6 7 8 9 10 11 12 
-
 txi.sum <- summarizeToGene(txi.tx, tx2gene)
-
 all.equal(txi$counts, txi.sum$counts)
 
-transcripts missing from tx2gene: 316
-summarizing abundance
-summarizing counts
-summarizing length
 
-TRUE
+##Creation of objects needed during the data normalisation step
 
 cts <- txi$counts
-
 normMat <- txi$length
 
+
+#Normalisation step
+
 normMat <- normMat/exp(rowMeans(log(normMat)))
-
 normCts <- cts/normMat
-
 eff.lib <- calcNormFactors(normCts) * colSums(normCts)
-
 normMat <- sweep(normMat, 2, eff.lib, "*")
-
 normMat <- log(normMat)
 
+
+#Creation of DGE list from the gene counts and filtering step
+
 y <- DGEList(cts)
-
 y$samples$group <- paste0(samples$sample_type)
-
 y <- scaleOffset(y, normMat)
-
-y
-
-$counts
-    A matrix: 31994 × 12 of type dbl 	VIR1	VIR2	VIR3	VIR4	VIR5	VIR6	vir7	vir8	vir9	vir10	vir11	vir12
-    AT1G01010	81.000	76.000	65	114.000	106.000	63	117.000	105.000	259.000	171.000	107.000	344.000
-    AT1G01020	472.000	328.000	222	279.000	301.001	213	223.999	191.001	474.000	283.000	233.001	767.000
-    AT1G01030	207.000	119.000	76	137.000	134.000	114	253.000	153.000	421.000	265.000	211.000	424.000
-    AT1G01040	814.000	575.000	619	939.000	617.000	581	1126.000	814.000	2399.000	1214.000	982.000	3140.000
-    AT1G01050	1160.000	1003.000	866	1016.000	985.000	737	601.000	591.000	1380.000	836.000	651.000	1981.000
-    AT1G01060	2124.000	1686.001	1975	2726.001	1812.000	1381	1902.000	1465.001	5000.001	2122.000	1793.000	5720.000
-    AT1G01070	152.000	123.000	121	144.000	115.000	137	96.000	113.000	302.510	206.000	177.000	452.000
-    AT1G01080	1556.000	1064.001	932	1190.000	1058.000	927	989.000	792.000	2220.000	1146.000	1075.000	2813.000
-    AT1G01090	5283.000	3832.000	3879	4372.000	3878.000	3539	2523.000	1873.000	5930.000	3126.000	2729.000	8256.000
-    AT1G01100	6018.000	5002.651	3989	3576.999	5047.650	3760	1510.000	1267.999	3830.000	2108.001	1968.000	5374.000
-    AT1G01110	116.000	125.000	127	178.000	158.000	130	76.000	51.000	178.000	78.000	96.000	442.000
-    AT1G01120	2179.000	2348.000	1973	3032.000	3381.000	2565	2695.000	1179.000	2612.000	1701.000	1202.000	4725.000
-    AT1G01130	76.000	32.000	59	50.000	79.000	62	55.000	15.000	42.000	13.000	16.000	82.000
-    AT1G01140	2260.000	1677.000	1657	2008.000	2312.000	1693	2140.000	1444.000	4103.999	2265.000	2233.000	6865.000
-    AT1G01150	0.000	5.000	0	0.000	0.000	11	5.000	0.000	4.000	0.000	0.000	6.000
-    AT1G01160	893.000	695.000	706	789.000	835.000	727	503.000	383.000	1117.000	557.000	568.000	1596.000
-    AT1G01170	2903.000	2174.000	1733	1531.000	2421.000	1833	800.000	647.000	1936.000	986.000	934.000	2459.000
-    AT1G01180	514.000	468.000	398	512.000	526.000	318	356.000	302.000	866.000	502.000	341.000	1335.000
-    AT1G01190	95.000	107.000	123	116.000	66.000	49	18.000	9.000	33.000	29.000	32.000	102.000
-    AT1G01200	11.000	23.000	7	22.000	20.000	24	8.000	15.000	16.000	14.000	21.000	52.000
-    AT1G01210	362.000	291.000	232	230.000	314.000	237	208.000	164.000	429.000	298.000	242.000	591.654
-    AT1G01220	494.000	408.000	447	447.000	326.000	352	569.999	434.001	1189.999	584.000	562.001	1572.000
-    AT1G01225	48.000	52.000	58	60.000	63.000	52	36.000	35.000	107.000	57.000	28.000	154.000
-    AT1G01230	851.000	676.000	604	649.000	693.000	539	298.000	289.000	808.000	489.000	391.000	1239.000
-    AT1G01240	1413.001	1133.000	964	1077.000	1274.000	945	702.000	791.999	2077.001	1052.000	889.000	2449.000
-    AT1G01250	211.000	193.000	166	134.000	148.000	149	119.000	114.000	411.000	171.000	155.000	379.000
-    AT1G01260	489.000	310.999	333	448.000	501.000	454	354.001	176.000	705.999	362.000	355.000	1146.999
-    AT1G01270	0.000	0.000	0	0.000	0.000	0	0.000	0.000	0.000	0.000	0.000	0.000
-    AT1G01280	0.000	0.000	0	0.000	0.000	0	0.000	0.000	0.000	0.000	0.000	0.000
-    AT1G01290	452.000	377.000	261	293.000	365.000	324	222.000	160.000	450.000	292.000	276.000	709.000
-    ⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮
-    ATMG01130	0.000	8.000	7.000	11.000	15.000	7.000	4.000	0.000	7.000	2.000	7.000	5.000
-    ATMG01170	80.653	78.597	70.391	57.459	75.473	56.438	19.450	22.221	60.755	31.638	45.806	112.890
-    ATMG01180	12.000	13.000	19.000	2.000	13.000	12.000	1.000	1.000	14.000	2.000	4.000	7.505
-    ATMG01190	194.279	101.750	182.817	113.949	221.351	201.409	72.127	36.331	234.344	130.420	79.333	280.315
-    ATMG01200	32.961	42.774	39.652	48.609	40.254	10.971	31.781	9.788	53.681	32.485	30.372	78.032
-    ATMG01210	4.000	16.000	4.000	6.000	18.000	16.000	4.000	3.000	9.000	6.000	2.000	15.000
-    ATMG01220	9.838	27.281	19.774	35.841	10.623	27.971	17.852	7.956	41.726	13.897	17.776	45.708
-    ATMG01230	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000
-    ATMG01240	2.000	2.000	0.000	1.000	1.000	0.000	0.000	1.000	0.000	0.000	1.000	3.000
-    ATMG01250	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	2.000	0.000	0.000	0.000
-    ATMG01260	0.000	0.000	0.000	1.000	0.000	0.000	0.000	0.000	4.000	1.000	0.000	1.000
-    ATMG01270	0.000	0.000	0.000	0.000	0.000	0.000	4.132	0.000	0.000	0.000	0.000	0.000
-    ATMG01275	9.302	1.621	5.294	0.000	4.220	0.000	0.000	0.000	15.679	9.361	0.000	0.000
-    ATMG01280	1.374	1.548	16.651	3.277	1.216	1.258	4.869	5.013	7.592	4.214	0.000	7.076
-    ATMG01290	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000
-    ATMG01300	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000
-    ATMG01310	0.000	0.000	0.000	0.000	1.000	5.000	0.000	0.000	0.000	0.000	0.000	0.000
-    ATMG01320	29.018	20.955	8.128	12.448	9.167	27.001	12.611	10.912	48.132	35.003	20.619	35.401
-    ATMG01330	46.000	32.000	40.000	25.000	38.000	38.000	14.000	14.000	58.000	29.000	24.000	79.000
-    ATMG01350	7.000	1.000	1.000	0.000	6.000	8.000	0.000	2.000	2.000	0.000	3.000	2.000
-    ATMG01360	110.000	62.000	81.000	54.000	45.000	98.000	47.000	31.000	188.000	84.000	67.000	158.000
-    ATMG01370	65.000	61.000	66.000	52.000	47.000	45.000	21.000	19.000	82.000	38.000	32.000	110.000
-    ATMG01380	99.000	59.000	66.000	46.000	50.000	67.000	26.000	18.000	56.000	27.000	31.000	69.000
-    ATMG01390	2452.970	1672.952	1403.765	1581.000	1540.000	2632.972	2242.976	1112.000	5511.404	3638.087	1676.954	4431.976
-    ATMG01400	0.000	0.000	0.000	0.000	0.000	4.000	0.000	1.000	0.000	0.000	0.000	0.000
-    ATMG01410	0.000	6.000	4.000	2.000	7.000	3.000	1.000	0.000	2.000	3.000	2.000	4.000
-    ATMG09450	162.000	147.000	183.000	113.000	133.000	157.000	44.000	31.000	134.000	69.000	55.000	169.000
-    ATMG09740	0.000	0.000	0.000	4.000	1.000	2.000	1.000	0.000	4.000	1.000	1.000	6.000
-    ATMG09960	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000	0.000
-    ATMG09980	0.000	2.000	0.000	1.000	0.000	0.000	1.000	0.000	0.000	3.000	0.000	1.000
-$samples
-    A data.frame: 12 × 3 	group	lib.size	norm.factors
-    	<chr>	<dbl>	<dbl>
-    VIR1	VIR	28201809	1
-    VIR2	VIR	22047389	1
-    VIR3	VIR	20803506	1
-    VIR4	VIR	24039982	1
-    VIR5	VIR	24089645	1
-    VIR6	VIR	20553635	1
-    vir7	vir	18409360	1
-    vir8	vir	13916284	1
-    vir9	vir	40876961	1
-    vir10	vir	22513650	1
-    vir11	vir	19868428	1
-    vir12	vir	57621487	1
-$offset
-    A matrix: 31994 × 12 of type dbl 	VIR1	VIR2	VIR3	VIR4	VIR5	VIR6	vir7	vir8	vir9	vir10	vir11	vir12
-    AT1G01010	17.13117	16.88003	16.82801	17.00546	16.96717	16.81307	16.73703	16.49713	17.54143	16.93809	16.81052	17.90290
-    AT1G01020	17.10003	16.86547	16.81454	16.99395	16.96634	16.79380	16.74213	16.53800	17.54197	16.98533	16.78283	17.92761
-    AT1G01030	17.11202	16.88257	16.83015	17.00801	16.96902	16.81531	16.73958	16.50264	17.53846	16.94057	16.81169	17.90198
-    AT1G01040	17.12308	16.87180	16.82730	17.00510	16.94866	16.80646	16.74799	16.52359	17.54744	16.93217	16.80961	17.90881
-    AT1G01050	17.13444	16.88004	16.83072	17.00548	16.97182	16.81514	16.73700	16.47690	17.54448	16.93856	16.81416	17.90327
-    AT1G01060	17.18370	16.93093	16.82591	17.01116	17.00258	16.86702	16.71180	16.48160	17.51326	16.89675	16.78456	17.84272
-    AT1G01070	17.15006	16.82077	16.84690	16.98472	16.98605	16.76095	16.72500	16.50904	17.56032	16.95699	16.82941	17.92180
-    AT1G01080	17.14225	16.88278	16.82529	16.98897	16.95948	16.84513	16.76914	16.52041	17.51828	16.93136	16.77985	17.88907
-    AT1G01090	17.13071	16.88004	16.82763	17.00547	16.96651	16.81278	16.73705	16.50000	17.54091	16.93803	16.81001	17.90286
-    AT1G01100	17.07916	16.84130	16.83124	17.01268	16.91554	16.78662	16.77340	16.54806	17.55524	16.94625	16.81792	17.94459
-    AT1G01110	17.13072	16.88042	16.82771	17.00586	16.96636	16.81294	16.73744	16.49813	17.54087	16.93837	16.80998	17.90320
-    AT1G01120	17.13044	16.88004	16.82740	17.00548	16.96612	16.81261	16.73706	16.50172	17.54060	16.93800	16.80971	17.90283
-    AT1G01130	17.15175	16.87795	16.84431	17.00433	16.99787	16.82480	16.73731	16.36621	17.56783	16.93994	16.83605	17.90365
-    AT1G01140	17.12936	16.88490	16.82811	17.00840	16.97155	16.81504	16.73269	16.50366	17.54281	16.93215	16.80146	17.90187
-    AT1G01150	17.12741	16.78918	16.82492	17.00556	16.96176	16.80027	16.72315	16.52060	17.52949	16.93765	16.80633	18.02569
-    AT1G01160	17.13393	16.87994	16.83028	17.00538	16.97113	16.81478	16.73691	16.47994	17.54459	16.93840	16.81360	17.90313
-    AT1G01170	17.14421	16.87992	16.83708	17.00492	16.98600	16.82167	16.73717	16.41458	17.55641	16.94016	16.82585	17.90405
-    AT1G01180	17.13185	16.88001	16.82857	17.00545	16.96815	16.81350	16.73701	16.49283	17.54221	16.93817	16.81129	17.90296
-    AT1G01190	17.12835	16.88040	16.82839	17.00557	16.96385	16.81580	16.73365	16.49345	17.54077	16.94654	16.80986	17.90537
-    AT1G01200	17.13293	16.88000	16.82946	17.00544	16.96969	16.81417	16.73698	16.48602	17.54345	16.93831	16.81249	17.90307
-    AT1G01210	17.15022	16.84060	16.80924	17.00225	16.97155	16.77925	16.77898	16.48599	17.55057	16.94364	16.83729	17.90244
-    AT1G01220	17.14834	16.86095	16.80311	17.00813	16.95254	16.81004	16.75480	16.50113	17.54044	16.95422	16.81209	17.90621
-    AT1G01225	17.13374	16.87999	16.83013	17.00543	16.97084	16.81467	16.73696	16.48094	17.54436	16.93841	16.81338	17.90315
-    AT1G01230	17.13557	16.87998	16.83164	17.00542	16.97345	16.81582	16.73693	16.46931	17.54645	16.93867	16.81542	17.90334
-    AT1G01240	17.14280	16.87616	16.80821	16.99849	16.94753	16.81054	16.73751	16.50570	17.53831	16.93417	16.82461	17.92796
-    AT1G01250	17.13540	16.87998	16.83150	17.00542	16.97321	16.81571	16.73693	16.47041	17.54626	16.93864	16.81523	17.90332
-    AT1G01260	17.11488	16.87382	16.81412	17.01606	16.96265	16.79018	16.70787	16.56990	17.54088	16.91745	16.82577	17.91841
-    AT1G01270	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    AT1G01280	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    AT1G01290	17.10264	16.90806	16.80796	16.94307	16.95343	16.79525	16.75229	16.54149	17.57860	16.98458	16.77521	17.90943
-    ⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮	⋮
-    ATMG01130	17.12741	16.86109	16.83140	16.98876	16.98937	16.81011	16.72336	16.52060	17.56045	16.92367	16.82871	17.88706
-    ATMG01170	17.13212	16.88001	16.82879	17.00545	16.96852	16.81366	16.73700	16.49118	17.54251	16.93821	16.81158	17.90299
-    ATMG01180	17.15364	16.87636	16.84549	17.00345	17.00227	16.82476	16.73772	16.35341	17.57280	16.93883	16.84098	17.90228
-    ATMG01190	17.13163	16.88002	16.82838	17.00545	16.96782	16.81335	16.73702	16.49424	17.54196	16.93814	16.81103	17.90294
-    ATMG01200	17.13547	16.87998	16.83155	17.00542	16.97330	16.81576	16.73693	16.46998	17.54633	16.93866	16.81531	17.90332
-    ATMG01210	17.15487	16.87431	16.84589	17.00301	17.00507	16.82386	16.73789	16.34715	17.57707	16.93692	16.84569	17.90028
-    ATMG01220	17.15340	16.87659	16.84539	17.00362	17.00164	16.82480	16.73766	16.35509	17.57193	16.93910	16.84016	17.90263
-    ATMG01230	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01240	17.16553	16.88475	16.82492	17.01348	17.01585	16.81074	16.73719	16.35747	17.53714	16.93765	16.85673	17.91055
-    ATMG01250	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01260	17.12741	16.88013	16.82492	17.00100	16.96176	16.81074	16.73719	16.52060	17.54752	16.93495	16.80633	17.89946
-    ATMG01270	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01275	17.13316	16.86042	16.82603	17.00556	16.97868	16.81074	16.73719	16.52060	17.54860	16.92212	16.80633	17.90258
-    ATMG01280	17.13640	16.88080	16.83247	17.00624	16.97428	16.81665	16.73775	16.47014	17.54728	16.93950	16.80633	17.90416
-    ATMG01290	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01300	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01310	17.12741	16.88013	16.82492	17.00556	16.97120	16.80130	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG01320	17.13506	16.87998	16.83122	17.00542	16.97273	16.81550	16.73693	16.47254	17.54588	16.93860	16.81486	17.90328
-    ATMG01330	17.15124	16.87822	16.84401	17.00448	16.99692	16.82471	16.73722	16.36944	17.56683	16.93999	16.83511	17.90381
-    ATMG01350	17.14822	16.87954	16.84200	17.00556	16.99172	16.82361	16.73719	16.38991	17.56178	16.93765	16.83030	17.90452
-    ATMG01360	17.13145	16.88002	16.82824	17.00546	16.96757	16.81324	16.73702	16.49538	17.54175	16.93812	16.81083	17.90292
-    ATMG01370	17.15364	16.87636	16.84549	17.00345	17.00227	16.82476	16.73772	16.35341	17.57280	16.93883	16.84098	17.90228
-    ATMG01380	17.11806	16.85580	16.85543	17.00412	16.95200	16.83730	16.73731	16.57697	17.48997	16.95465	16.86013	17.81024
-    ATMG01390	17.13064	16.88004	16.82757	17.00547	16.96641	16.81274	16.73705	16.50046	17.54083	16.93802	16.80993	17.90285
-    ATMG01400	17.12741	16.88013	16.82492	17.00556	16.96176	16.90338	16.73719	16.42797	17.53714	16.93765	16.80633	17.90258
-    ATMG01410	17.12741	16.87302	16.82874	16.99848	16.97346	16.81197	16.72993	16.52060	17.54509	16.93243	16.81393	17.89694
-    ATMG09450	17.09689	16.92627	16.72386	16.91924	16.88794	16.79540	16.78273	16.55907	17.65622	16.97393	16.70874	18.02173
-    ATMG09740	17.12741	16.88013	16.82492	16.95372	16.88253	16.76616	16.76975	16.52060	17.60845	16.95771	16.74006	18.02057
-    ATMG09960	17.12741	16.88013	16.82492	17.00556	16.96176	16.81074	16.73719	16.52060	17.53714	16.93765	16.80633	17.90258
-    ATMG09980	17.12741	16.90926	16.82492	16.90035	16.96176	16.81074	16.73911	16.52060	17.53714	16.92454	16.80633	17.98984
-
 keep <- filterByExpr(y)
-
 y <- y[keep,]
-
 names(y)
 
-    'counts'
-    'samples'
-    'offset'
+
+#Two different visualisations of the data (BCV and MDS plots)
 
 plotMDS(y, method="bcv")
-
 plotMDS(y)
+
+
+#Create a design model matrix for generalised linear model (GLM) fit
 
 design <- model.matrix(~ y$samples$group, y$samples)
 
-y <- calcNormFactors(y)
 
+#Calculate the normalisation factors to estimate dispersion (common, trended and tagwise)
+
+y <- calcNormFactors(y)
 y <- estimateDisp(y, design)
+
+
+# Biological coefficient of variation (BCV) plot
 
 plotBCV(y)
 
+
+#Fit the data to the design matrix following a generalised linear model and determine the top 10 tags
+
 fit <- glmFit(y, design)
-
 lrt <- glmLRT(fit, coef=ncol(design))
-
 tt <- topTags(lrt)
 
-resLRT <- topTags(lrt, n = nrow(y$counts))
 
+#Create an object containing all the differentially expressed genes according to Likelihood-ratio test (LRT) (number will come out the 2nd command)
+
+resLRT <- topTags(lrt, n = nrow(y$counts))
 nrow(resLRT$table)
 
+
+#Create an object containing all the significantly differentially expressed genes (number will come out the 3rd command)
+
 selectedLRT <- resLRT$table$FDR < 0.05
-
 selectedLRT <- resLRT$table[selectedLRT, ]
-
 nrow(selectedLRT)
 
-20177
-12074
 
-Upregulated <-selectedLRT[selectedLRT$logFC > 0,]
+#Create two objects individually containing all the significantly down- and up- regulated genes (numbers will come out of 3rd and 4th commands respectively)
+UpregulatedLRT <-selectedLRT[selectedLRT$logFC > 0,]
+DownregulatedLRT <- selectedLRT[selectedLRT$logFC < 0,]
+nrow(UpregulatedLRT)
+nrow(DownregulatedLRT)
 
-Downregulated <- selectedLRT[selectedLRT$logFC < 0,]
 
-nrow(Upregulated)
+#Use decideTestDGE to determine how many genes are down-, up- or not differentially regulated
 
-nrow(Downregulated)
+dTDLRT <- decideTestsDGE(lrt, adjust.method="BH", p.value=0.05)
+summary (dTDLRT)
 
-5972
-6102
 
-de1 <- decideTestsDGE(lrt, adjust.method="BH", p.value=0.05)
-
-summary (de1)
-
-       y$samples$groupVIR
-Down                 6102
-NotSig               8103
-Up                   5972
+#Creation of an object containing all differentially expressed genes according to the Exact Test
 
 dgeExactTest <- exactTest(y)
 
+
+#Create an object containing all the differentially expressed genes according to Exact Test (number will come out the 2nd command)
+
 resExactTest <- topTags(dgeExactTest, n = nrow(dgeExactTest$table))
-
-head(resExactTest$table)
-
-A data.frame: 6 × 4 	logFC	logCPM	PValue	FDR
-	<dbl>	<dbl>	<dbl>	<dbl>
-AT2G01422	-7.319466	4.777323	0.000000e+00	0.000000e+00
-AT1G67105	-7.258730	8.066412	3.231028e-161	3.259623e-157
-AT3G05685	4.163865	4.102935	2.592624e-94	1.743713e-90
-AT2G45660	1.647519	6.737287	8.030252e-89	4.050660e-85
-AT1G24070	-2.382646	3.752673	3.751564e-80	1.513906e-76
-AT4G22570	1.612161	6.008898	2.959579e-73	9.952571e-70
-
-par(mfrow = c(1,2))
-
-hist(resExactTest$table$PValue, xlab = "p-value", main = "raw p-values")
-
-hist(resExactTest$table$FDR, xlab = "p-value", main = "adjusted p-values")
-
-selectedET <- resExactTest$table$FDR < 0.05
-
-selectedET <- resExactTest$table[selectedET, ]
-
 nrow(resExactTest)
 
+
+#Compare raw p-values to adjusted p-values for one gene (picked randomly) across all the replicates
+
+par(mfrow = c(1,2))
+hist(resExactTest$table$PValue, xlab = "p-value", main = "raw p-values")
+hist(resExactTest$table$FDR, xlab = "p-value", main = "adjusted p-values")
+
+
+#Create an object containing all the significantly differentially expressed genes (number will come out the 3rd command)
+
+selectedET <- resExactTest$table$FDR < 0.05
+selectedET <- resExactTest$table[selectedET, ]
 nrow(selectedET)
 
-20177
-12069
 
-Upregulated1 <-selectedET[selectedET$logFC > 0,]
+#Create two objects individually containing all the significantly down- and up- regulated genes (numbers will come out of 3rd and 4th commands respectively)
 
-Downregulated2 <- selectedET[selectedET$logFC < 0,]
+UpregulatedET <-selectedET[selectedET$logFC > 0,]
+DownregulatedET <- selectedET[selectedET$logFC < 0,]
+nrow(UpregulatedET)
+nrow(DownregulatedET)
 
-nrow(Upregulated)
 
-nrow(Downregulated)
+#Use decideTestDGE to determine how many genes are down-, up- or not differentially regulated
 
-6024
-6045
+dTD_ET <- decideTestsDGE(dgeExactTest, adjust.method="BH", p.value=0.05)
+summary (dTD_ET)
 
-de2 <- decideTestsDGE(dgeExactTest, adjust.method="BH", p.value=0.05)
 
-summary (de2)
+#Create an object to visualize intersection between DGE gene results between GLM-Likelihood-ratio Test and Exact Test through Venn-diagram
 
-       VIR-vir
-Down      6045
-NotSig    8108
-Up        6024
-
-BiocManager::install("VennDiagram")
-
-Bioconductor version 3.10 (BiocManager 1.30.9), R 3.6.1 (2019-07-05)
-Installing package(s) 'VennDiagram'
-Updating HTML index of packages in '.Library'
-Making 'packages.html' ... done
-Old packages: 'BiocFileCache', 'Category', 'farver', 'GenomicAlignments',
-  'KEGGREST', 'KernSmooth', 'mgcv', 'nlme', 'R6', 'Rcpp', 'Rsamtools',
-  'survival'
-
-library("VennDiagram")
-
-vd <- venn.diagram(x = list("Exact test" = rownames(selectedET),
-
-"GLM" = rownames(selectedLRT)), label.col=c("red","black","red"), cat.col="red",filename = NULL)
-
+vd <- venn.diagram(x = list("Exact test" = rownames(selectedET),"GLM" = rownames(selectedLRT)), label.col=c("red","black","red"), cat.col="red",filename = NULL)
 grid.draw(vd)
-
 dev.print(jpeg,"vennd.jpeg")
 
-Warning message in dev.print(jpeg, "vennd.jpeg"):
-“need to specify one of 'width' and 'height'”
 
-png: 2
+#Produce an MA plot with down- and up- regulated genes colored in pale green (using GLM-LRT DGE analysis results)
 
 gene_list <- as.vector(rownames(selectedLRT)) 
-
 maPlot( x=resLRT, y=selectedLRT, logAbundance=resLRT$table$logCPM, logFC=resLRT$table$logFC,de.tags=rownames(selectedLRT),xlab="mean of normalized counts",ylab="log fold change",col=NULL, smooth.scatter=FALSE)
-
 with(subset(selectedLRT, rownames(selectedLRT) %in% gene_list), points(selectedLRT$logCPM, selectedLRT$logFC, pch=20, col="light green"))
 
