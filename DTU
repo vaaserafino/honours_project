@@ -1,58 +1,113 @@
-library("BiocManager")
+#Import the needed packages for this experiment
 
 library("tximport")
+library(DRIMSeq)
+library("stageR")
+library("GOstats")
+library("VennDiagram")
+
+
+#Create an object containing all the files found in the directory "differential_gene_expression"
 
 dir <- "differential_expression/"
-
 list.files(dir)
 
  
+#Create an object containing every salmon file by reading "samples.txt"
 
 samples <- read.table(file.path(dir,"samples.txt~"), header=TRUE)
 samples
 
 
+#Create an object containing every "quant.sf" needed in this experiment
+
 files <- file.path(dir, "salmon", samples$sample_name, "quant.sf")
+
+
+#Rename (if needed) the column depending on the sample type
+
 column<- c("VIR","VIR","VIR","VIR","VIR","VIR","vir","vir","vir","vir","vir","vir")
-
 names(files) <- paste0(column,1:12)
-files
 
 
+#Generate a matrix of the abundance, counts, lengths and counts from abundance of each transcript for each replicate using the quantification files
 
 txi <- tximport(files, type="salmon", txOut=TRUE, countsFromAbundance="scaledTPM")
 cts <- txi$counts
 cts <- cts[rowSums(cts) > 0,]
+
+
+#Create a txdb object using the most up to date TAIR genome annotation (here, Araport11)
+
 txdb <- makeTxDbFromGFF("Araport11_GFF3_genes_transposons.gff",format="gff")
+
+
+#Create a data.frame (txdf) linking transcript IDs to gene IDs
+
 txdf <- select(txdb, keys(txdb, "GENEID"), "TXNAME", "GENEID")
 tab <- table(txdf$GENEID)
 txdf$ntx <- tab[match(txdf$GENEID, names(tab))]
+
+
+#Verify all transcripts in cts are present in txdf$TXNAME column (if output is FALSE, following the code chunk below, otherwise skip it)
+
+all(rownames(cts) %in% txdf$TXNAME)
+
+
+#If output above is FALSE, run this code chunk
+
 txdf <- txdf[match(rownames(cts), txdf$TXNAME), ]
 rownames(txdf) <- NULL
 idx <- rownames(cts) %in% txdf$TXNAME
 cts.filt <- cts[idx,]
-all(rownames(cts.filt) %in% txdf$TXNAME)
-all(rownames(cts.filt) %in% txdf$TXNAME)
+
+
+#Match columns from cts.filt to each corresponding transcript and verify they all match properly (output should be TRUE)
+
 txdf <- txdf[match(rownames(cts.filt),txdf$TXNAME),]
 all(rownames(cts.filt) == txdf$TXNAME)
+
+
+#Build a data.frame with the gene ID, the transcript ID, columns for each of the samples
+
 counts <- data.frame(gene_id=txdf$GENEID,feature_id=txdf$TXNAME,cts.filt)
 
 
+#Create a dmDSdata object with counts samples data.frame 
 
-library(DRIMSeq)
 d <- dmDSdata(counts=counts, samples=samples)
 d
+
+
+#dmDSdata object method chosen uses genes as row definers (1st row = all transcripts corresponding to the first gene)
+
 methods(class=class(d))
 
 
+#Filtering of the object with n=total number of samples and n.small= sample size of the smallest group
+  # Refer to this paper for additional information regarding the settings used Love MI, Soneson C, Patro R. Swimming downstream: statistical analysis of differential transcript usage following Salmon quantification. F1000Res. 2018 Jun 27;7:952. doi: 10.12688/f1000research.15398.3.
+
 n <- 12
 n.small <- 6
-d <- dmFilter(d,
+d <- dmFilter(d,min_samps_feature_expr=n.small, min_feature_expr=10,
+                min_samps_feature_prop=n.small, min_feature_prop=0.05,
+                min_samps_gene_expr=n, min_gene_expr=10)
 d
 
+
+#Create a table to find out how many of the selected genes have X isoforms
+
 table(table(counts(d)$gene_id))
+
+
+#Create a design matrix with two conditions
+
 design_full <- model.matrix(~sample_type, data=DRIMSeq::samples(d))
 colnames(design_full)
+
+
+#Test for DTU
+
 set.seed(1)
 system.time({
 
@@ -65,33 +120,58 @@ system.time({
 })i_uu
 
 
+#Produce a results table
+
 res <- DRIMSeq::results(d)
 head(res)
+
+
+#Determine p-value for each feature (here, transcript)
 
 res.txp <- DRIMSeq::results(d, level="feature")
 head(res.txp)
 
+
+#Format the data to carry out further analysis (transform NA into 1)
+
 no.na <- function(x) ifelse(is.na(x), 1, x)
 res$pvalue <- no.na(res$pvalue)
 res.txp$pvalue <- no.na(res.txp$pvalue)
+
+
+#Plot estimated proportions for one specific genes (gives yourself an idea of switch occuring if any)
+
 idx <- which(res$adj_pvalue < 0.05)[15]
 res[idx,]
-
 plotProportions(d, res$gene_id[idx], "sample_type")
+
+
+#Check how many genes and transcripts (respectively) were retained after running DRIMSeq on the entire dataset
 
 nrow(res)
 nrow(res.txp)
 
+
+#
+
 pScreen <- res$pvalue
 strp <- function(x) substr(x,1,11)
 names(pScreen) <- strp(res$gene_id)
+
+
+#
+
 pConfirmation <- matrix(res.txp$pvalue, ncol=1)
 rownames(pConfirmation) <- strp(res.txp$feature_id)
+
+
+#
+
 tx2gene <- res.txp[,c("feature_id", "gene_id")]
 for (i in 1:2) tx2gene[,i] <- strp(tx2gene[,i])
 
-BiocManager::install("stageR")
-library("stageR")
+
+#
 
 stageRObj <- stageRTx(pScreen=pScreen, pConfirmation=pConfirmation,pScreenAdjusted=FALSE, tx2gene=tx2gene)
 stageRObj <- stageWiseAdjustment(stageRObj, method="dtu", alpha=0.05) 
@@ -105,27 +185,24 @@ suppressWarnings({
 head(drim.padj)
 nrow(drim.padj)
 
+
+#
+
 res.txp.filt <- DRIMSeq::results(d, level="feature")
 smallProportionSD <- function(d, filter=0.1) {
-
   cts <- as.matrix(subset(counts(d), select=-c(gene_id, feature_id)))
-
   gene.cts <- rowsum(cts, counts(d)$gene_id)
-
   total.cts <- gene.cts[match(counts(d)$gene_id, rownames(gene.cts)),]
-
   props <- cts/total.cts
-
   propSD <- sqrt(rowVars(props))
-
   propSD < filter
-
 }
 
 filt <- smallProportionSD(d)
 res.txp.filt$pvalue[filt] <- 1
 res.txp.filt$adj_pvalue[filt] <- 1
 res.txp.filt$pvalue <- no.na(res.txp.filt$pvalue)
+
 pScreen1 <- res$pvalue
 strp <- function(x) substr(x,1,11)
 names(pScreen1) <- strp(res$gene_id)
@@ -155,17 +232,26 @@ nrow(DTU)
 head(DTU)
 capture.output(DTU, file="DTU.txt")
 
-BiocManager::install("GOstats")
-library("GOstats")
+
+#Hypergeometric test to determine if genes associated with m6A(s) and genes with DTU are significantly the same (if p-value<0.05, genes from the two sets are fundamentally the same)
 
 phyper(351,2822,30519,1470,lower.tail=F)
 
-library("VennDiagram")
+
+#Create an object containing all the gene IDs associated with m6A(s)
 
 m6a <- read.delim("DTU/all_m6Agenes.txt", sep="\t",header=FALSE)
 rownames(m6a) <- m6a$V1
+
+
+#Create an object containing all the gene IDs with DTU
+
 DTUgenes <- read.delim("DTU/DTU_id_no_na.txt", sep="\t",header=FALSE)
 rownames(DTUgenes) <- DTUgenes$V1
+
+
+#Visualize the intersection between the two objects created by producing a venn-diagram
+
 v_d <- venn.diagram(x = list("m6A genes" = rownames(m6a),
 "DTU genes" = rownames(DTUgenes)), label.col=c("black","red","black"), cat.col="red",cat.pos=1,filename = NULL)
 grid.draw(v_d)
