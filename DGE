@@ -178,7 +178,7 @@ nrow(UpregulatedET)
 nrow(DownregulatedET)
 
 
-#Use decideTestDGE to determine how many genes are down-, up- or not differentially regulated
+#Use decideTestDGE to determine how many genes are down-, up- or not differentially regulated 
 
 dTD_ET <- decideTestsDGE(dgeExactTest, adjust.method="BH", p.value=0.05)
 summary (dTD_ET)
